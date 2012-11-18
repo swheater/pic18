@@ -6,7 +6,7 @@ RM   = rm
 MAKE = make
 
 obj-m   := pic18.o
-pic18-y := pic18_sysfs.o pic18_worker.o pic18_io.o
+pic18-y := pic18_lifecycle.o pic18_sysfs.o pic18_worker.o pic18_io.o
 
 KERNEL_RELEASE_VERSION = $(shell uname -r)
 
