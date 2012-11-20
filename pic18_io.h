@@ -5,9 +5,23 @@
 #ifndef _PIC18_IO_H_
 #define _PIC18_IO_H_
 
+#include <linux/types.h>
+
 extern int  pic18_io_init(void);
-extern void pic18_io_setvpp(void);
-extern void pic18_io_clearvpp(void);
+extern int  pic18_io_get_gpio_pgd(void);
+extern void pic18_io_set_gpio_pgd(int gpio);
+extern int  pic18_io_get_gpio_pgc(void);
+extern void pic18_io_set_gpio_pgc(int gpio);
+extern int  pic18_io_get_gpio_vpp(void);
+extern void pic18_io_set_gpio_vpp(int gpio);
+extern ssize_t pic18_io_get_flash(char *flash);
+extern void pic18_io_set_flash(const char *flash, size_t size);
+extern void pic18_io_set_pgd_value(void);
+extern void pic18_io_clear_pgd_value(void);
+extern void pic18_io_set_pgc_value(void);
+extern void pic18_io_clear_pgc_value(void);
+extern void pic18_io_set_vpp_value(void);
+extern void pic18_io_clear_vpp_value(void);
 extern void pic18_io_exit(void);
 
 #endif

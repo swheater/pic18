@@ -26,10 +26,10 @@ int pic18_worker_main(void *data)
 
     while (! kthread_should_stop())
     {
-        pic18_io_setvpp();
+        pic18_io_set_vpp_value();
 	mdelay(500);
 
-        pic18_io_clearvpp();
+        pic18_io_clear_vpp_value();
 	mdelay(500);
     }
 
