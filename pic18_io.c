@@ -6,16 +6,23 @@
 #include <linux/types.h>
 #include <linux/string.h>
 #include <linux/kernel.h>
+#include <linux/delay.h>
 #include <linux/gpio.h>
 
 #include "pic18_io.h"
 
-#define INVALID_GPIO (-1)
+#define INVALID_GPIO     (-1)
+#define PROGRAM_MODE_KEY (0x4D434850)
 
-static volatile int  pgd_gpio = INVALID_GPIO;
-static volatile int  pgc_gpio = INVALID_GPIO;
-static volatile int  vpp_gpio = INVALID_GPIO;
-static volatile char flash[PAGE_SIZE];
+#define WORD08_MASK (0x00000008)
+#define WORD16_MASK (0x00000080)
+#define WORD32_MASK (0x00008000)
+
+static volatile int pgd_gpio = INVALID_GPIO;
+static volatile int pgc_gpio = INVALID_GPIO;
+static volatile int vpp_gpio = INVALID_GPIO;
+
+static char flash[PAGE_SIZE];
 
 static int pic18_gpio_request(int gpio, int flags, const char *label)
 {
@@ -103,40 +110,56 @@ void pic18_io_set_flash(const char *buffer, size_t size)
     memcpy(flash, buffer, size);
 }
 
-void pic18_io_set_pgd_value(void)
+static void pic18_io_program_start(void)
 {
-    if (pgd_gpio != INVALID_GPIO)
-        gpio_set_value(pgd_gpio, 1);
+    gpio_set_value(pgc_gpio, 0);
+    gpio_set_value(pgd_gpio, 0);
+    mdelay(1000); // DEBUG DELAY
+    mdelay(2);
+    gpio_set_value(vpp_gpio, 0);
+    mdelay(1000); // DEBUG DELAY
+    mdelay(2);
 }
 
-void pic18_io_clear_pgd_value(void)
+static void pic18_io_program_stop(void)
 {
-    if (pgd_gpio != INVALID_GPIO)
-        gpio_set_value(pgd_gpio, 0);
+    gpio_set_value(pgc_gpio, 0);
+    gpio_set_value(pgd_gpio, 0);
+    mdelay(1000); // DEBUG DELAY
+    mdelay(1);
+    gpio_set_value(vpp_gpio, 1);
 }
 
-void pic18_io_set_pgc_value(void)
+static void pic18_io_send(unsigned int value, unsigned int mask)
 {
-    if (pgd_gpio != INVALID_GPIO)
+    while (mask != 0)
+    {
+        int bitValue = value & mask;
+        mask = (mask >> 1) & 0x7FFFFFFF;
+
         gpio_set_value(pgc_gpio, 1);
-}
-
-void pic18_io_clear_pgc_value(void)
-{
-    if (pgd_gpio != INVALID_GPIO)
+        gpio_set_value(pgd_gpio, (bitValue != 0? 1: 0));
+        mdelay(1000); // DEBUG DELAY
+        mdelay(1);
+        
         gpio_set_value(pgc_gpio, 0);
+        mdelay(1000); // DEBUG DELAY
+        mdelay(1);
+    }
 }
 
-void pic18_io_set_vpp_value(void)
+void pic18_io_program(void)
 {
-    if (pgd_gpio != INVALID_GPIO)
-        gpio_set_value(vpp_gpio, 1);
-}
-
-void pic18_io_clear_vpp_value(void)
-{
-    if (pgd_gpio != INVALID_GPIO)
-        gpio_set_value(vpp_gpio, 0);
+    if ((pgd_gpio != INVALID_GPIO) && (pgc_gpio != INVALID_GPIO) && (vpp_gpio != INVALID_GPIO))
+    {
+        pic18_io_program_start();
+        mdelay(1000); // DEBUG DELAY
+        mdelay(1);
+        pic18_io_send(PROGRAM_MODE_KEY, WORD32_MASK);
+        mdelay(1000); // DEBUG DELAY
+        pic18_io_program_stop();
+        mdelay(1);
+    }
 }
 
 void pic18_io_exit(void)

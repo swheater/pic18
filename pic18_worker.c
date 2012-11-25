@@ -26,11 +26,8 @@ int pic18_worker_main(void *data)
 
     while (! kthread_should_stop())
     {
-        pic18_io_set_vpp_value();
-	mdelay(500);
-
-        pic18_io_clear_vpp_value();
-	mdelay(500);
+        pic18_io_program();
+	mdelay(2000);
     }
 
     printk(KERN_INFO "pic18_worker: main stopped\n");
