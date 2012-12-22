@@ -18,11 +18,17 @@
 #define WORD16_MASK (0x00000080)
 #define WORD32_MASK (0x00008000)
 
+#define INVALID_DIRECT (0)
+#define SEND_DIRECT    (1)
+#define RECEIVE_DIRECT (2)
+
+static int pgd_gpio_direction;
+
 static volatile int pgd_gpio = INVALID_GPIO;
 static volatile int pgc_gpio = INVALID_GPIO;
 static volatile int vpp_gpio = INVALID_GPIO;
 
-static char flash[PAGE_SIZE];
+static volatile char flash[PAGE_SIZE];
 
 static int pic18_gpio_request(int gpio, int flags, const char *label)
 {
@@ -59,6 +65,11 @@ int pic18_io_init(void)
     pgc_gpio = pic18_gpio_request(pgc_gpio, GPIOF_OUT_INIT_LOW, "PGC");
     vpp_gpio = pic18_gpio_request(vpp_gpio, GPIOF_OUT_INIT_HIGH, "Vpp");
 
+    if (pgd_gpio != INVALID_GPIO)
+        pgd_gpio_direction = SEND_DIRECT;
+    else
+        pgd_gpio_direction = INVALID_DIRECT;
+
     return 0;
 }
 
@@ -72,6 +83,11 @@ void pic18_io_set_gpio_pgd(int gpio)
     pic18_gpio_free(pgd_gpio, "PGD");
     pgd_gpio = gpio;
     pgd_gpio = pic18_gpio_request(pgd_gpio, GPIOF_OUT_INIT_LOW, "PGD");
+
+    if (pgd_gpio != INVALID_GPIO)
+        pgd_gpio_direction = SEND_DIRECT;
+    else
+        pgd_gpio_direction = INVALID_DIRECT;
 }
 
 int pic18_io_get_gpio_pgc(void)
@@ -110,24 +126,26 @@ void pic18_io_set_flash(const char *buffer, size_t size)
     memcpy(flash, buffer, size);
 }
 
-static void pic18_io_program_start(void)
+static void pic18_io_direction(int direction)
 {
-    gpio_set_value(pgc_gpio, 0);
-    gpio_set_value(pgd_gpio, 0);
-    mdelay(1000); // DEBUG DELAY
-    mdelay(2);
-    gpio_set_value(vpp_gpio, 0);
-    mdelay(1000); // DEBUG DELAY
-    mdelay(2);
-}
+    if (pgd_gpio_direction != direction)
+    {
+        pgd_gpio_direction = INVALID_DIRECT;
 
-static void pic18_io_program_stop(void)
-{
-    gpio_set_value(pgc_gpio, 0);
-    gpio_set_value(pgd_gpio, 0);
-    mdelay(1000); // DEBUG DELAY
-    mdelay(1);
-    gpio_set_value(vpp_gpio, 1);
+        if (pgd_gpio != INVALID_GPIO)
+        {
+            if (direction == SEND_DIRECT)
+            {
+	      if (! gpio_direction_output(pgd_gpio, 0))
+                    pgd_gpio_direction = SEND_DIRECT;
+            }
+            else if (direction == RECEIVE_DIRECT)
+            {
+                if (! gpio_direction_input(pgd_gpio))
+                    pgd_gpio_direction = RECEIVE_DIRECT;
+            }
+        }
+    }
 }
 
 static void pic18_io_send(unsigned int value, unsigned int mask)
@@ -137,15 +155,48 @@ static void pic18_io_send(unsigned int value, unsigned int mask)
         int bitValue = value & mask;
         mask = (mask >> 1) & 0x7FFFFFFF;
 
-        gpio_set_value(pgc_gpio, 1);
+        gpio_set_value(pgc_gpio, 0);
         gpio_set_value(pgd_gpio, (bitValue != 0? 1: 0));
         mdelay(1000); // DEBUG DELAY
         mdelay(1);
         
-        gpio_set_value(pgc_gpio, 0);
+        gpio_set_value(pgc_gpio, 1);
         mdelay(1000); // DEBUG DELAY
         mdelay(1);
     }
+    gpio_set_value(pgc_gpio, 0);
+}
+
+static unsigned int pic18_io_recieve(unsigned int mask)
+{
+    unsigned int value = 0;
+    while (mask != 0)
+    {
+        int bitValue = value & mask;
+        mask = (mask >> 1) & 0x7FFFFFFF;
+
+    }
+    return value;
+}
+
+static void pic18_io_program_start(void)
+{
+    gpio_set_value(vpp_gpio, 0);
+    mdelay(1000); // DEBUG DELAY
+    mdelay(2);
+    pic18_io_send(PROGRAM_MODE_KEY, WORD32_MASK);
+    mdelay(1000); // DEBUG DELAY
+    mdelay(1);
+    gpio_set_value(vpp_gpio, 1);
+    mdelay(1000); // DEBUG DELAY
+    mdelay(1);
+}
+
+static void pic18_io_program_stop(void)
+{
+    mdelay(1000); // DEBUG DELAY
+    mdelay(1);
+    gpio_set_value(vpp_gpio, 0);
 }
 
 void pic18_io_program(void)
@@ -155,7 +206,9 @@ void pic18_io_program(void)
         pic18_io_program_start();
         mdelay(1000); // DEBUG DELAY
         mdelay(1);
-        pic18_io_send(PROGRAM_MODE_KEY, WORD32_MASK);
+
+        
+
         mdelay(1000); // DEBUG DELAY
         pic18_io_program_stop();
         mdelay(1);
